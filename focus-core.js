@@ -92,6 +92,146 @@ function captureSessionMoment() {
 window.captureSessionMoment = captureSessionMoment;
 
 /* -----------------------------------------
+   Report Review Session code chunk
+----------------------------------------- */
+
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function openSessionReport() {
+    if (!window.sessionReport) {
+        alert('No session report found yet.');
+        return;
+    }
+
+    const r = window.sessionReport;
+    const reveals = Array.isArray(r.reveals) ? r.reveals : [];
+    const pred = r.prediction || {};
+
+    const historyImg = r.history && r.history.image ? `<img class="shot" src="${r.history.image}" />` : `<div class="missing">No screenshot captured.</div>`;
+    const historyScript = r.history && r.history.script ? escapeHtml(r.history.script) : '(no script captured)';
+
+    const revealHtml = reveals.map((rev, idx) => {
+        const img = rev && rev.image ? `<img class="shot" src="${rev.image}" />` : `<div class="missing">Screenshot pending / missing.</div>`;
+        const script = escapeHtml((rev && rev.script) || '');
+        const step = (rev && (rev.step || rev.step === 0)) ? rev.step : (idx + 1);
+        return `
+            <section class="card">
+                <h3>Reveal Burst ${escapeHtml(step)}</h3>
+                ${img}
+                <pre class="script">${script || '(no script captured)'}</pre>
+            </section>
+        `;
+    }).join('\n');
+
+    const predBlock = `
+        <section class="card">
+            <h3>Prediction</h3>
+            <div class="kv"><span class="k">Guess</span><span class="v">${escapeHtml(pred.guess || '')}</span></div>
+            <div class="kv"><span class="k">Target</span><span class="v">${pred.target == null ? '' : escapeHtml(pred.target)}</span></div>
+            <div class="kv"><span class="k">Final Close</span><span class="v">${pred.actualPrice == null ? '' : escapeHtml(pred.actualPrice)}</span></div>
+            <div class="kv"><span class="k">Correct</span><span class="v">${escapeHtml(String(!!pred.isCorrect))}</span></div>
+            <div class="kv"><span class="k">Accuracy Delta</span><span class="v">${pred.accuracyDelta == null ? '' : escapeHtml(pred.accuracyDelta)}</span></div>
+        </section>
+    `;
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Session Report</title>
+    <style>
+      :root { --bg:#0b0f19; --card:#111827; --text:#e5e7eb; --muted:#9ca3af; --line:#1f2937; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+      .wrap { max-width: 980px; margin: 0 auto; }
+      header { display:flex; gap:12px; align-items:baseline; justify-content:space-between; margin-bottom: 16px; }
+      h1 { font-size: 20px; margin: 0; }
+      .meta { color: var(--muted); font-size: 12px; }
+      .actions { display:flex; gap:8px; }
+      button { border:1px solid var(--line); background:#0f172a; color:var(--text); padding:8px 10px; border-radius:10px; cursor:pointer; }
+      button:hover { background:#111c33; }
+      .grid { display:grid; gap:12px; }
+      .card { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+      h2 { font-size: 16px; margin: 0 0 8px; }
+      h3 { font-size: 14px; margin: 0 0 8px; color: var(--text); }
+      .shot { width: 100%; height: auto; border-radius: 10px; border:1px solid var(--line); background:#0b1222; }
+      .missing { padding: 12px; border-radius: 10px; border:1px dashed var(--line); color: var(--muted); }
+      .script { white-space: pre-wrap; margin: 10px 0 0; padding: 10px; border-radius: 10px; border:1px solid var(--line); background:#0f172a; color: var(--text); font-size: 12px; line-height: 1.5; }
+      .kv { display:flex; justify-content:space-between; gap:12px; padding: 6px 0; border-bottom: 1px solid rgba(31,41,55,0.7); }
+      .kv:last-child { border-bottom: none; }
+      .k { color: var(--muted); }
+      @media print {
+        body { background: #fff; color: #000; padding: 0; }
+        .card { border:1px solid #ddd; background:#fff; }
+        .script { background:#f7f7f7; border:1px solid #ddd; color:#000; }
+        button { display:none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Session Report</h1>
+          <div class="meta">Timestamp: ${escapeHtml(r.timestamp || '')} • Reveals: ${reveals.length}</div>
+        </div>
+        <div class="actions">
+          <button onclick="window.print()">Print / Save PDF</button>
+          <button onclick="downloadJson()">Download JSON</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>History (Initial 50 Candles)</h2>
+          ${historyImg}
+          <pre class="script">${historyScript}</pre>
+        </section>
+
+        ${predBlock}
+
+        <section class="card">
+          <h2>Reveal Bursts</h2>
+          <div class="grid">
+            ${revealHtml || '<div class="missing">No reveal bursts recorded.</div>'}
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      const report = ${JSON.stringify(r)};
+      function downloadJson() {
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'session-report.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+    </script>
+  </body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+}
+window.openSessionReport = openSessionReport;
+
+
+/* -----------------------------------------
    1. LOAD BLOCK FROM SUPABASE
 ----------------------------------------- */
 async function loadFocusBlock() {
@@ -441,6 +581,10 @@ function endSession(reason) {
     document.getElementById('homeBtn').onclick = () => {
         window.location.href = 'index.html';
     };
+    const reportBtn = document.getElementById('reportBtn');
+    if (reportBtn) reportBtn.onclick = () => openSessionReport();
+
+    
 }
 
 /* -----------------------------------------
