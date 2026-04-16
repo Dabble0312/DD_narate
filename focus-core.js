@@ -306,7 +306,7 @@ function initChart() {
         height: 501,
         layout: {
             textColor:       '#000',
-            backgroundColor: '#fff',
+            backgroundColor: '#0a0f1a',
         },
         timeScale: {
             timeVisible:    true,
